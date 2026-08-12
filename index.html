@@ -9,119 +9,194 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: radial-gradient(circle at top, #1e2233 0%, #0d0f1a 70%);
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 20px;
+    color: #e6e8ef;
   }
   .card {
-    background: rgba(255,255,255,0.95);
-    border-radius: 20px;
+    background: rgba(30, 34, 51, 0.75);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 22px;
     padding: 30px;
     width: 100%;
     max-width: 480px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     text-align: center;
   }
+  h1 { font-size: 1.3rem; margin-bottom: 20px; color: #f2f3f7; font-weight: 600; }
   .section-title {
     text-align: left;
-    font-size: 0.9rem;
-    color: #555;
-    margin: 20px 0 10px;
+    font-size: 0.85rem;
+    color: #9aa0b4;
+    margin: 22px 0 10px;
     font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
+  .search-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    font-size: 1rem;
+    background: rgba(255,255,255,0.06);
+    color: #f2f3f7;
+  }
+  input::placeholder { color: #767c92; }
+  input:focus { outline: none; border-color: #5b8cff; }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 12px;
+    background: #5b8cff;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  button:hover { background: #4874e0; }
+  .location-btn {
+    background: none;
+    color: #8fa8ff;
+    text-decoration: underline;
+    font-size: 0.85rem;
+    padding: 5px;
+    margin-bottom: 6px;
+  }
+  .location-btn:hover { background: none; color: #b1c2ff; }
+
+  .icon { font-size: 4rem; line-height: 1; }
+  .city { font-size: 1.2rem; color: #d5d8e4; margin: 6px 0 2px; }
+  .temp { font-size: 3.5rem; font-weight: 700; color: #f2f3f7; }
+  .desc { font-size: 1rem; color: #9aa0b4; margin-bottom: 15px; }
+  .details {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.9rem;
+    color: #c3c6d4;
+  }
+  .details span { display: flex; flex-direction: column; gap: 3px; }
+  .details small { color: #767c92; font-size: 0.7rem; }
+
   .hourly-scroll {
     display: flex;
     overflow-x: auto;
-    gap: 14px;
+    gap: 16px;
     padding-bottom: 8px;
   }
   .hourly-item {
     flex: 0 0 auto;
     text-align: center;
     font-size: 0.8rem;
-    color: #444;
+    color: #c3c6d4;
+    min-width: 46px;
   }
-  .hourly-item .h-icon { font-size: 1.6rem; }
+  .hourly-item .h-icon { font-size: 1.6rem; margin: 4px 0; }
+  .hourly-item .h-rain { font-size: 0.7rem; color: #5b8cff; margin-top: 2px; }
+
   .daily-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 4px;
-    border-bottom: 1px solid #eee;
+    padding: 10px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
     font-size: 0.9rem;
     text-align: left;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s ease;
   }
+  .daily-row:hover { background: rgba(255,255,255,0.05); }
   .daily-row:last-child { border-bottom: none; }
-  .daily-day { flex: 1.2; color: #333; font-weight: 500; }
-  .daily-icon { flex: 0.6; font-size: 1.3rem; }
-  .daily-temps { flex: 1; text-align: right; color: #444; }
-  .daily-temps .max { font-weight: 600; color: #333; }
+  .daily-day { flex: 1.1; color: #e6e8ef; font-weight: 500; }
+  .daily-icon { flex: 0.5; font-size: 1.3rem; }
+  .daily-rain { flex: 0.9; font-size: 0.8rem; color: #5b8cff; text-align: center; }
+  .daily-temps { flex: 1; text-align: right; color: #c3c6d4; }
+  .daily-temps .max { font-weight: 600; color: #f2f3f7; }
+
   #radarMap {
     height: 300px;
-    border-radius: 12px;
+    border-radius: 14px;
     margin-top: 10px;
   }
   .radar-controls {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 10px;
     margin-top: 8px;
     font-size: 0.8rem;
-    color: #555;
+    color: #9aa0b4;
   }
   .radar-controls button {
-    padding: 4px 10px;
+    padding: 4px 12px;
     font-size: 0.8rem;
   }
-  h1 { font-size: 1.3rem; margin-bottom: 20px; color: #333; }
-  .search-box {
+
+  .error { color: #ff6b6b; font-size: 0.9rem; margin-top: 10px; }
+  .loading { color: #9aa0b4; margin-top: 10px; }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: rgba(24, 27, 41, 0.97);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 18px;
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal-header {
     display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
   }
-  input {
-    flex: 1;
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    font-size: 1rem;
-  }
-  button {
-    padding: 10px 16px;
-    border: none;
-    border-radius: 10px;
-    background: #4facfe;
-    color: white;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-  button:hover { background: #3a9de0; }
-  .location-btn {
+  .modal-header h2 { font-size: 1.05rem; color: #f2f3f7; }
+  .modal-close {
     background: none;
-    color: #4facfe;
-    text-decoration: underline;
-    font-size: 0.85rem;
-    padding: 5px;
-    margin-bottom: 10px;
+    color: #9aa0b4;
+    font-size: 1.2rem;
+    padding: 2px 8px;
   }
-  .temp { font-size: 3.5rem; font-weight: 600; color: #333; }
-  .city { font-size: 1.2rem; color: #555; margin-bottom: 5px; }
-  .desc { font-size: 1rem; color: #777; margin-bottom: 15px; }
-  .details {
+  .modal-close:hover { background: none; color: #fff; }
+  .modal-hour-row {
     display: flex;
-    justify-content: space-around;
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #eee;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
     font-size: 0.9rem;
-    color: #555;
   }
-  .icon { font-size: 4rem; }
-  .error { color: #d33; font-size: 0.9rem; margin-top: 10px; }
-  .loading { color: #777; margin-top: 10px; }
+  .modal-hour-row:last-child { border-bottom: none; }
+  .mh-time { flex: 0.8; color: #e6e8ef; }
+  .mh-icon { flex: 0.6; font-size: 1.3rem; text-align: center; }
+  .mh-temp { flex: 0.8; text-align: center; color: #f2f3f7; font-weight: 500; }
+  .mh-rain { flex: 1; text-align: right; color: #5b8cff; font-size: 0.8rem; }
 </style>
 </head>
 <body>
@@ -158,8 +233,20 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="dayModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="modalTitle">Previsione oraria</h2>
+      <button class="modal-close" onclick="closeDayModal()">✕</button>
+    </div>
+    <div id="modalHourly"></div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+let lastData = null;
+
 async function useMyLocation() {
   if (!navigator.geolocation) {
     showError("Geolocalizzazione non supportata dal browser.");
@@ -192,8 +279,9 @@ async function searchCity() {
 
 async function getWeather(lat, lon, placeName) {
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7&models=ecmwf_ifs025`);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7&models=ecmwf_ifs025`);
     const data = await res.json();
+    lastData = data;
     renderWeather(data, placeName);
     renderHourly(data);
     renderDaily(data);
@@ -208,6 +296,7 @@ function renderHourly(data) {
   const times = data.hourly.time;
   const temps = data.hourly.temperature_2m;
   const codes = data.hourly.weather_code;
+  const rainProb = data.hourly.precipitation_probability;
 
   let startIdx = times.findIndex(t => new Date(t) >= now);
   if (startIdx === -1) startIdx = 0;
@@ -221,6 +310,7 @@ function renderHourly(data) {
         <div>${hour}:00</div>
         <div class="h-icon">${icon}</div>
         <div>${Math.round(temps[i])}°</div>
+        <div class="h-rain">💧${rainProb[i]}%</div>
       </div>
     `;
   }
@@ -233,6 +323,7 @@ function renderDaily(data) {
   const codes = data.daily.weather_code;
   const max = data.daily.temperature_2m_max;
   const min = data.daily.temperature_2m_min;
+  const rainSum = data.daily.precipitation_sum;
   const dayNames = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 
   let html = '';
@@ -241,15 +332,51 @@ function renderDaily(data) {
     const label = i === 0 ? 'Oggi' : dayNames[d.getDay()];
     const [icon] = weatherInfo(codes[i]);
     html += `
-      <div class="daily-row">
+      <div class="daily-row" onclick="openDayModal(${i})">
         <div class="daily-day">${label}</div>
         <div class="daily-icon">${icon}</div>
-        <div class="daily-temps"><span class="max">${Math.round(max[i])}°</span> / ${Math.round(min[i])}°</div>
+        <div class="daily-rain">💧 ${rainSum[i].toFixed(1)}mm</div>
+        <div class="daily-temps"><span class="max">${Math.round(min[i])}°</span> / ${Math.round(max[i])}°</div>
       </div>
     `;
   }
   document.getElementById('dailyList').innerHTML = html;
   document.getElementById('dailySection').style.display = 'block';
+}
+
+function openDayModal(dayIndex) {
+  if (!lastData) return;
+  const dayDate = lastData.daily.time[dayIndex];
+  const times = lastData.hourly.time;
+  const temps = lastData.hourly.temperature_2m;
+  const codes = lastData.hourly.weather_code;
+  const rainProb = lastData.hourly.precipitation_probability;
+  const wind = lastData.hourly.wind_speed_10m;
+
+  const dayNames = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+  const d = new Date(dayDate);
+  document.getElementById('modalTitle').textContent = dayIndex === 0 ? 'Oggi' : dayNames[d.getDay()];
+
+  let html = '';
+  for (let i = 0; i < times.length; i++) {
+    if (!times[i].startsWith(dayDate)) continue;
+    const hour = new Date(times[i]).getHours();
+    const [icon] = weatherInfo(codes[i]);
+    html += `
+      <div class="modal-hour-row">
+        <div class="mh-time">${hour}:00</div>
+        <div class="mh-icon">${icon}</div>
+        <div class="mh-temp">${Math.round(temps[i])}°</div>
+        <div class="mh-rain">💧${rainProb[i]}% · 💨${Math.round(wind[i])}km/h</div>
+      </div>
+    `;
+  }
+  document.getElementById('modalHourly').innerHTML = html;
+  document.getElementById('dayModal').classList.add('open');
+}
+
+function closeDayModal() {
+  document.getElementById('dayModal').classList.remove('open');
 }
 
 // --- Radar (RainViewer, gratis senza API key) ---
@@ -321,8 +448,8 @@ function renderWeather(data, placeName) {
     <div class="temp">${Math.round(c.temperature_2m)}°C</div>
     <div class="desc">${desc}</div>
     <div class="details">
-      <span>💧 ${c.relative_humidity_2m}%</span>
-      <span>💨 ${Math.round(c.wind_speed_10m)} km/h</span>
+      <span>💧 ${c.relative_humidity_2m}%<small>Umidità</small></span>
+      <span>💨 ${Math.round(c.wind_speed_10m)} km/h<small>Vento</small></span>
     </div>
   `;
 }
@@ -337,6 +464,10 @@ function showError(msg) {
 
 document.getElementById('cityInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') searchCity();
+});
+
+document.getElementById('dayModal').addEventListener('click', (e) => {
+  if (e.target.id === 'dayModal') closeDayModal();
 });
 </script>
 
