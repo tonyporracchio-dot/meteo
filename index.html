@@ -392,13 +392,13 @@ async function initRadar(lat, lon) {
   document.getElementById('radarSection').style.display = 'block';
 
   if (!radarMapInstance) {
-    radarMapInstance = L.map('radarMap').setView([lat, lon], 6);
+    radarMapInstance = L.map('radarMap').setView([lat, lon], 9);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap'
     }).addTo(radarMapInstance);
     L.marker([lat, lon]).addTo(radarMapInstance);
   } else {
-    radarMapInstance.setView([lat, lon], 6);
+    radarMapInstance.setView([lat, lon], 9);
   }
 
   try {
