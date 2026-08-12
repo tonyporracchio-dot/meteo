@@ -279,7 +279,7 @@ async function searchCity() {
 
 async function getWeather(lat, lon, placeName) {
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7&models=ecmwf_ifs025`);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7&models=ecmwf_ifs025`);
     const data = await res.json();
     lastData = data;
     renderWeather(data, placeName);
@@ -297,6 +297,7 @@ function renderHourly(data) {
   const temps = data.hourly.temperature_2m;
   const codes = data.hourly.weather_code;
   const rainProb = data.hourly.precipitation_probability;
+  const rainMm = data.hourly.precipitation;
 
   let startIdx = times.findIndex(t => new Date(t) >= now);
   if (startIdx === -1) startIdx = 0;
@@ -304,13 +305,14 @@ function renderHourly(data) {
   let html = '';
   for (let i = startIdx; i < startIdx + 24 && i < times.length; i++) {
     const hour = new Date(times[i]).getHours();
-    const [icon] = weatherInfo(codes[i]);
+    const [icon] = weatherInfo(codes[i], hour);
     html += `
       <div class="hourly-item">
         <div>${hour}:00</div>
         <div class="h-icon">${icon}</div>
         <div>${Math.round(temps[i])}°</div>
         <div class="h-rain">💧${rainProb[i]}%</div>
+        <div class="h-rain">${rainMm[i].toFixed(1)}mm</div>
       </div>
     `;
   }
@@ -330,7 +332,7 @@ function renderDaily(data) {
   for (let i = 0; i < days.length; i++) {
     const d = new Date(days[i]);
     const label = i === 0 ? 'Oggi' : dayNames[d.getDay()];
-    const [icon] = weatherInfo(codes[i]);
+    const [icon] = weatherInfo(codes[i], 12);
     html += `
       <div class="daily-row" onclick="openDayModal(${i})">
         <div class="daily-day">${label}</div>
@@ -351,6 +353,7 @@ function openDayModal(dayIndex) {
   const temps = lastData.hourly.temperature_2m;
   const codes = lastData.hourly.weather_code;
   const rainProb = lastData.hourly.precipitation_probability;
+  const rainMm = lastData.hourly.precipitation;
   const wind = lastData.hourly.wind_speed_10m;
 
   const dayNames = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
@@ -361,13 +364,13 @@ function openDayModal(dayIndex) {
   for (let i = 0; i < times.length; i++) {
     if (!times[i].startsWith(dayDate)) continue;
     const hour = new Date(times[i]).getHours();
-    const [icon] = weatherInfo(codes[i]);
+    const [icon] = weatherInfo(codes[i], hour);
     html += `
       <div class="modal-hour-row">
         <div class="mh-time">${hour}:00</div>
         <div class="mh-icon">${icon}</div>
         <div class="mh-temp">${Math.round(temps[i])}°</div>
-        <div class="mh-rain">💧${rainProb[i]}% · 💨${Math.round(wind[i])}km/h</div>
+        <div class="mh-rain">💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm · 💨${Math.round(wind[i])}km/h</div>
       </div>
     `;
   }
@@ -426,9 +429,12 @@ function radarStep(dir) {
   showRadarFrame();
 }
 
-function weatherInfo(code) {
+function weatherInfo(code, hour) {
+  const isNight = hour !== undefined && (hour >= 21 || hour < 6);
   const map = {
-    0: ["☀️", "Sereno"], 1: ["🌤️", "Poco nuvoloso"], 2: ["⛅", "Parzialmente nuvoloso"],
+    0: isNight ? ["🌙", "Sereno"] : ["☀️", "Sereno"],
+    1: isNight ? ["🌙", "Poco nuvoloso"] : ["🌤️", "Poco nuvoloso"],
+    2: isNight ? ["☁️", "Parzialmente nuvoloso"] : ["⛅", "Parzialmente nuvoloso"],
     3: ["☁️", "Nuvoloso"], 45: ["🌫️", "Nebbia"], 48: ["🌫️", "Nebbia gelata"],
     51: ["🌦️", "Pioggerella leggera"], 53: ["🌦️", "Pioggerella"], 55: ["🌧️", "Pioggerella intensa"],
     61: ["🌧️", "Pioggia leggera"], 63: ["🌧️", "Pioggia"], 65: ["🌧️", "Pioggia intensa"],
@@ -441,7 +447,8 @@ function weatherInfo(code) {
 
 function renderWeather(data, placeName) {
   const c = data.current;
-  const [icon, desc] = weatherInfo(c.weather_code);
+  const currentHour = new Date().getHours();
+  const [icon, desc] = weatherInfo(c.weather_code, currentHour);
   document.getElementById('result').innerHTML = `
     <div class="icon">${icon}</div>
     <div class="city">${placeName}</div>
