@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meteo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: rgba(255,255,255,0.95);
+    border-radius: 20px;
+    padding: 30px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    text-align: center;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 20px; color: #333; }
+  .search-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 1rem;
+  }
+  button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: #4facfe;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:hover { background: #3a9de0; }
+  .location-btn {
+    background: none;
+    color: #4facfe;
+    text-decoration: underline;
+    font-size: 0.85rem;
+    padding: 5px;
+    margin-bottom: 10px;
+  }
+  .temp { font-size: 3.5rem; font-weight: 600; color: #333; }
+  .city { font-size: 1.2rem; color: #555; margin-bottom: 5px; }
+  .desc { font-size: 1rem; color: #777; margin-bottom: 15px; }
+  .details {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    font-size: 0.9rem;
+    color: #555;
+  }
+  .icon { font-size: 4rem; }
+  .error { color: #d33; font-size: 0.9rem; margin-top: 10px; }
+  .loading { color: #777; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🌤️ Meteo</h1>
+
+  <div class="search-box">
+    <input type="text" id="cityInput" placeholder="Nome città..." />
+    <button onclick="searchCity()">Cerca</button>
+  </div>
+  <button class="location-btn" onclick="useMyLocation()">📍 Usa la mia posizione</button>
+
+  <div id="result"></div>
+</div>
+
+<script>
+async function useMyLocation() {
+  if (!navigator.geolocation) {
+    showError("Geolocalizzazione non supportata dal browser.");
+    return;
+  }
+  showLoading();
+  navigator.geolocation.getCurrentPosition(
+    (pos) => getWeather(pos.coords.latitude, pos.coords.longitude, "La tua posizione"),
+    () => showError("Impossibile ottenere la posizione.")
+  );
+}
+
+async function searchCity() {
+  const city = document.getElementById('cityInput').value.trim();
+  if (!city) return;
+  showLoading();
+  try {
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=it`);
+    const geoData = await geoRes.json();
+    if (!geoData.results || geoData.results.length === 0) {
+      showError("Città non trovata.");
+      return;
+    }
+    const { latitude, longitude, name } = geoData.results[0];
+    getWeather(latitude, longitude, name);
+  } catch (e) {
+    showError("Errore nella ricerca della città.");
+  }
+}
+
+async function getWeather(lat, lon, placeName) {
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
+    const data = await res.json();
+    renderWeather(data, placeName);
+  } catch (e) {
+    showError("Errore nel recupero dei dati meteo.");
+  }
+}
+
+function weatherInfo(code) {
+  const map = {
+    0: ["☀️", "Sereno"], 1: ["🌤️", "Poco nuvoloso"], 2: ["⛅", "Parzialmente nuvoloso"],
+    3: ["☁️", "Nuvoloso"], 45: ["🌫️", "Nebbia"], 48: ["🌫️", "Nebbia gelata"],
+    51: ["🌦️", "Pioggerella leggera"], 53: ["🌦️", "Pioggerella"], 55: ["🌧️", "Pioggerella intensa"],
+    61: ["🌧️", "Pioggia leggera"], 63: ["🌧️", "Pioggia"], 65: ["🌧️", "Pioggia intensa"],
+    71: ["🌨️", "Neve leggera"], 73: ["🌨️", "Neve"], 75: ["❄️", "Neve intensa"],
+    80: ["🌦️", "Rovesci leggeri"], 81: ["🌧️", "Rovesci"], 82: ["⛈️", "Rovesci violenti"],
+    95: ["⛈️", "Temporale"], 96: ["⛈️", "Temporale con grandine"], 99: ["⛈️", "Temporale forte"]
+  };
+  return map[code] || ["🌡️", "Condizioni sconosciute"];
+}
+
+function renderWeather(data, placeName) {
+  const c = data.current;
+  const [icon, desc] = weatherInfo(c.weather_code);
+  document.getElementById('result').innerHTML = `
+    <div class="icon">${icon}</div>
+    <div class="city">${placeName}</div>
+    <div class="temp">${Math.round(c.temperature_2m)}°C</div>
+    <div class="desc">${desc}</div>
+    <div class="details">
+      <span>💧 ${c.relative_humidity_2m}%</span>
+      <span>💨 ${Math.round(c.wind_speed_10m)} km/h</span>
+    </div>
+  `;
+}
+
+function showLoading() {
+  document.getElementById('result').innerHTML = '<div class="loading">Caricamento...</div>';
+}
+
+function showError(msg) {
+  document.getElementById('result').innerHTML = `<div class="error">${msg}</div>`;
+}
+
+document.getElementById('cityInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') searchCity();
+});
+</script>
+
+</body>
+</html>
