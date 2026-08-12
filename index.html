@@ -416,8 +416,10 @@ function showRadarFrame() {
   if (!radarFrames.length) return;
   const frame = radarFrames[radarFrameIndex];
   if (radarLayer) radarMapInstance.removeLayer(radarLayer);
-  radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
-    opacity: 0.6
+  radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${frame.path}/512/{z}/{x}/{y}/2/1_1.png`, {
+    opacity: 0.6,
+    maxNativeZoom: 10,
+    maxZoom: 12
   }).addTo(radarMapInstance);
   const t = new Date(frame.time * 1000);
   document.getElementById('radarTime').textContent = t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
