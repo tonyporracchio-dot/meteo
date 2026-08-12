@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meteo</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -127,24 +126,22 @@
   .daily-temps { flex: 1; text-align: right; color: #c3c6d4; }
   .daily-temps .max { font-weight: 600; color: #f2f3f7; }
 
-  #radarMap {
-    height: 300px;
-    border-radius: 14px;
-    margin-top: 10px;
-  }
-  .radar-controls {
+  .section-title-row {
     display: flex;
-    justify-content: center;
     align-items: center;
-    gap: 10px;
-    margin-top: 8px;
-    font-size: 0.8rem;
-    color: #9aa0b4;
+    justify-content: space-between;
+    margin: 22px 0 10px;
   }
-  .radar-controls button {
-    padding: 4px 12px;
-    font-size: 0.8rem;
+  .section-title-row .section-title { margin: 0; }
+  .fullscreen-btn {
+    background: rgba(255,255,255,0.08);
+    color: #c3c6d4;
+    font-size: 0.75rem;
+    padding: 5px 10px;
+    border-radius: 8px;
   }
+  .fullscreen-btn:hover { background: rgba(255,255,255,0.15); }
+  .radar-modal-box { max-width: 700px; }
 
   .error { color: #ff6b6b; font-size: 0.9rem; margin-top: 10px; }
   .loading { color: #9aa0b4; margin-top: 10px; }
@@ -222,19 +219,22 @@
     <div id="dailyList"></div>
   </div>
 
-  <div id="radarSection" style="display:none;">
-    <div class="section-title">Radar precipitazioni (RainViewer)</div>
-    <div id="radarMap"></div>
-    <div class="radar-controls">
-      <button onclick="radarStep(-1)">◀</button>
-      <span id="radarTime">--:--</span>
-      <button onclick="radarStep(1)">▶</button>
-    </div>
-  </div>
-
   <div id="windySection" style="display:none;">
-    <div class="section-title">Radar (Windy)</div>
+    <div class="section-title-row">
+      <div class="section-title">Radar</div>
+      <button class="fullscreen-btn" onclick="openRadarFullscreen()">⛶ Schermo intero</button>
+    </div>
     <iframe id="windyFrame" style="width:100%; height:300px; border:none; border-radius:14px;" loading="lazy"></iframe>
+  </div>
+</div>
+
+<div class="modal-overlay" id="radarModal">
+  <div class="modal-box radar-modal-box">
+    <div class="modal-header">
+      <h2>Radar precipitazioni</h2>
+      <button class="modal-close" onclick="closeRadarFullscreen()">✕</button>
+    </div>
+    <iframe id="windyFrameFull" style="width:100%; height:70vh; border:none; border-radius:14px;" loading="lazy"></iframe>
   </div>
 </div>
 
@@ -248,7 +248,6 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let lastData = null;
 
@@ -290,7 +289,6 @@ async function getWeather(lat, lon, placeName) {
     renderWeather(data, placeName);
     renderHourly(data);
     renderDaily(data);
-    initRadar(lat, lon);
     loadWindyWidget(lat, lon);
   } catch (e) {
     showError("Errore nel recupero dei dati meteo.");
@@ -388,59 +386,23 @@ function closeDayModal() {
   document.getElementById('dayModal').classList.remove('open');
 }
 
-// --- Radar (RainViewer, gratis senza API key) ---
-let radarMapInstance = null;
-let radarLayer = null;
-let radarFrames = [];
-let radarFrameIndex = 0;
-
-async function initRadar(lat, lon) {
-  document.getElementById('radarSection').style.display = 'block';
-
-  if (!radarMapInstance) {
-    radarMapInstance = L.map('radarMap').setView([lat, lon], 9);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
-    }).addTo(radarMapInstance);
-    L.marker([lat, lon]).addTo(radarMapInstance);
-  } else {
-    radarMapInstance.setView([lat, lon], 9);
-  }
-
-  try {
-    const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-    const data = await res.json();
-    radarFrames = data.radar.past.concat(data.radar.nowcast || []);
-    radarFrameIndex = data.radar.past.length - 1;
-    showRadarFrame();
-  } catch (e) {
-    console.error('Radar non disponibile', e);
-  }
-}
-
-function showRadarFrame() {
-  if (!radarFrames.length) return;
-  const frame = radarFrames[radarFrameIndex];
-  if (radarLayer) radarMapInstance.removeLayer(radarLayer);
-  radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${frame.path}/512/{z}/{x}/{y}/2/1_1.png`, {
-    opacity: 0.6,
-    maxNativeZoom: 10,
-    maxZoom: 12
-  }).addTo(radarMapInstance);
-  const t = new Date(frame.time * 1000);
-  document.getElementById('radarTime').textContent = t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-}
-
-function radarStep(dir) {
-  if (!radarFrames.length) return;
-  radarFrameIndex = Math.max(0, Math.min(radarFrames.length - 1, radarFrameIndex + dir));
-  showRadarFrame();
-}
+let lastWindyUrl = '';
 
 function loadWindyWidget(lat, lon) {
   const url = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&width=650&height=450&zoom=9&level=surface&overlay=radar&product=radar&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
+  lastWindyUrl = url;
   document.getElementById('windyFrame').src = url;
   document.getElementById('windySection').style.display = 'block';
+}
+
+function openRadarFullscreen() {
+  document.getElementById('windyFrameFull').src = lastWindyUrl;
+  document.getElementById('radarModal').classList.add('open');
+}
+
+function closeRadarFullscreen() {
+  document.getElementById('radarModal').classList.remove('open');
+  document.getElementById('windyFrameFull').src = '';
 }
 
 function weatherInfo(code, hour) {
@@ -489,6 +451,10 @@ document.getElementById('cityInput').addEventListener('keypress', (e) => {
 
 document.getElementById('dayModal').addEventListener('click', (e) => {
   if (e.target.id === 'dayModal') closeDayModal();
+});
+
+document.getElementById('radarModal').addEventListener('click', (e) => {
+  if (e.target.id === 'radarModal') closeRadarFullscreen();
 });
 
 // Avvio automatico: mostra il meteo della posizione dell'utente
