@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meteo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -20,9 +21,60 @@
     border-radius: 20px;
     padding: 30px;
     width: 100%;
-    max-width: 380px;
+    max-width: 480px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     text-align: center;
+  }
+  .section-title {
+    text-align: left;
+    font-size: 0.9rem;
+    color: #555;
+    margin: 20px 0 10px;
+    font-weight: 600;
+  }
+  .hourly-scroll {
+    display: flex;
+    overflow-x: auto;
+    gap: 14px;
+    padding-bottom: 8px;
+  }
+  .hourly-item {
+    flex: 0 0 auto;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #444;
+  }
+  .hourly-item .h-icon { font-size: 1.6rem; }
+  .daily-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 4px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+  .daily-row:last-child { border-bottom: none; }
+  .daily-day { flex: 1.2; color: #333; font-weight: 500; }
+  .daily-icon { flex: 0.6; font-size: 1.3rem; }
+  .daily-temps { flex: 1; text-align: right; color: #444; }
+  .daily-temps .max { font-weight: 600; color: #333; }
+  #radarMap {
+    height: 300px;
+    border-radius: 12px;
+    margin-top: 10px;
+  }
+  .radar-controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #555;
+  }
+  .radar-controls button {
+    padding: 4px 10px;
+    font-size: 0.8rem;
   }
   h1 { font-size: 1.3rem; margin-bottom: 20px; color: #333; }
   .search-box {
@@ -84,8 +136,29 @@
   <button class="location-btn" onclick="useMyLocation()">📍 Usa la mia posizione</button>
 
   <div id="result"></div>
+
+  <div id="hourlySection" style="display:none;">
+    <div class="section-title">Previsioni orarie</div>
+    <div class="hourly-scroll" id="hourlyScroll"></div>
+  </div>
+
+  <div id="dailySection" style="display:none;">
+    <div class="section-title">Previsioni prossimi giorni</div>
+    <div id="dailyList"></div>
+  </div>
+
+  <div id="radarSection" style="display:none;">
+    <div class="section-title">Radar precipitazioni</div>
+    <div id="radarMap"></div>
+    <div class="radar-controls">
+      <button onclick="radarStep(-1)">◀</button>
+      <span id="radarTime">--:--</span>
+      <button onclick="radarStep(1)">▶</button>
+    </div>
+  </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 async function useMyLocation() {
   if (!navigator.geolocation) {
@@ -119,12 +192,111 @@ async function searchCity() {
 
 async function getWeather(lat, lon, placeName) {
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`);
     const data = await res.json();
     renderWeather(data, placeName);
+    renderHourly(data);
+    renderDaily(data);
+    initRadar(lat, lon);
   } catch (e) {
     showError("Errore nel recupero dei dati meteo.");
   }
+}
+
+function renderHourly(data) {
+  const now = new Date();
+  const times = data.hourly.time;
+  const temps = data.hourly.temperature_2m;
+  const codes = data.hourly.weather_code;
+
+  let startIdx = times.findIndex(t => new Date(t) >= now);
+  if (startIdx === -1) startIdx = 0;
+
+  let html = '';
+  for (let i = startIdx; i < startIdx + 24 && i < times.length; i++) {
+    const hour = new Date(times[i]).getHours();
+    const [icon] = weatherInfo(codes[i]);
+    html += `
+      <div class="hourly-item">
+        <div>${hour}:00</div>
+        <div class="h-icon">${icon}</div>
+        <div>${Math.round(temps[i])}°</div>
+      </div>
+    `;
+  }
+  document.getElementById('hourlyScroll').innerHTML = html;
+  document.getElementById('hourlySection').style.display = 'block';
+}
+
+function renderDaily(data) {
+  const days = data.daily.time;
+  const codes = data.daily.weather_code;
+  const max = data.daily.temperature_2m_max;
+  const min = data.daily.temperature_2m_min;
+  const dayNames = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+  let html = '';
+  for (let i = 0; i < days.length; i++) {
+    const d = new Date(days[i]);
+    const label = i === 0 ? 'Oggi' : dayNames[d.getDay()];
+    const [icon] = weatherInfo(codes[i]);
+    html += `
+      <div class="daily-row">
+        <div class="daily-day">${label}</div>
+        <div class="daily-icon">${icon}</div>
+        <div class="daily-temps"><span class="max">${Math.round(max[i])}°</span> / ${Math.round(min[i])}°</div>
+      </div>
+    `;
+  }
+  document.getElementById('dailyList').innerHTML = html;
+  document.getElementById('dailySection').style.display = 'block';
+}
+
+// --- Radar (RainViewer, gratis senza API key) ---
+let radarMapInstance = null;
+let radarLayer = null;
+let radarFrames = [];
+let radarFrameIndex = 0;
+
+async function initRadar(lat, lon) {
+  document.getElementById('radarSection').style.display = 'block';
+
+  if (!radarMapInstance) {
+    radarMapInstance = L.map('radarMap').setView([lat, lon], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(radarMapInstance);
+    L.marker([lat, lon]).addTo(radarMapInstance);
+  } else {
+    radarMapInstance.setView([lat, lon], 6);
+  }
+
+  try {
+    const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    const data = await res.json();
+    radarFrames = data.radar.past.concat(data.radar.nowcast || []);
+    radarFrameIndex = data.radar.past.length - 1;
+    showRadarFrame();
+  } catch (e) {
+    console.error('Radar non disponibile', e);
+  }
+}
+
+function showRadarFrame() {
+  if (!radarFrames.length) return;
+  const frame = radarFrames[radarFrameIndex];
+  if (radarLayer) radarMapInstance.removeLayer(radarLayer);
+  radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+    opacity: 0.6
+  }).addTo(radarMapInstance);
+  const t = new Date(frame.time * 1000);
+  document.getElementById('radarTime').textContent = t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function radarStep(dir) {
+  if (!radarFrames.length) return;
+  radarFrameIndex = Math.max(0, Math.min(radarFrames.length - 1, radarFrameIndex + dir));
+  showRadarFrame();
 }
 
 function weatherInfo(code) {
