@@ -223,13 +223,18 @@
   </div>
 
   <div id="radarSection" style="display:none;">
-    <div class="section-title">Radar precipitazioni</div>
+    <div class="section-title">Radar precipitazioni (RainViewer)</div>
     <div id="radarMap"></div>
     <div class="radar-controls">
       <button onclick="radarStep(-1)">◀</button>
       <span id="radarTime">--:--</span>
       <button onclick="radarStep(1)">▶</button>
     </div>
+  </div>
+
+  <div id="windySection" style="display:none;">
+    <div class="section-title">Radar (Windy)</div>
+    <iframe id="windyFrame" style="width:100%; height:300px; border:none; border-radius:14px;" loading="lazy"></iframe>
   </div>
 </div>
 
@@ -286,6 +291,7 @@ async function getWeather(lat, lon, placeName) {
     renderHourly(data);
     renderDaily(data);
     initRadar(lat, lon);
+    loadWindyWidget(lat, lon);
   } catch (e) {
     showError("Errore nel recupero dei dati meteo.");
   }
@@ -429,6 +435,12 @@ function radarStep(dir) {
   if (!radarFrames.length) return;
   radarFrameIndex = Math.max(0, Math.min(radarFrames.length - 1, radarFrameIndex + dir));
   showRadarFrame();
+}
+
+function loadWindyWidget(lat, lon) {
+  const url = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&width=650&height=450&zoom=9&level=surface&overlay=radar&product=radar&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
+  document.getElementById('windyFrame').src = url;
+  document.getElementById('windySection').style.display = 'block';
 }
 
 function weatherInfo(code, hour) {
