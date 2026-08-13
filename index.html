@@ -368,9 +368,26 @@ function buildBlendedHourly(data) {
   return out;
 }
 
-function buildBlendedDaily(data) {
+function dailyIconFromHourly(dayDate, blendedHourly) {
+  const counts = {};
+  for (let i = 0; i < blendedHourly.time.length; i++) {
+    if (!blendedHourly.time[i].startsWith(dayDate)) continue;
+    const hour = new Date(blendedHourly.time[i]).getHours();
+    if (hour < 8 || hour > 19) continue; // solo ore diurne
+    const code = blendedHourly.weather_code[i];
+    if (code === null || code === undefined) continue;
+    counts[code] = (counts[code] || 0) + 1;
+  }
+  let best = null, bestCount = 0;
+  for (const c in counts) {
+    if (counts[c] > bestCount) { bestCount = counts[c]; best = Number(c); }
+  }
+  return best;
+}
+
+function buildBlendedDaily(data, blendedHourly) {
   const days = data.daily.time;
-  const now = new Date();
+
   const out = { time: days, weather_code: [], temperature_2m_max: [], temperature_2m_min: [], precipitation_sum: [], precipitation_probability_max: [] };
 
   for (let i = 0; i < days.length; i++) {
@@ -381,8 +398,10 @@ function buildBlendedDaily(data) {
     out.temperature_2m_min.push(avg(blend.map(m => data.daily[`temperature_2m_min_${m}`]?.[i])));
     out.precipitation_sum.push(avg(blend.map(m => data.daily[`precipitation_sum_${m}`]?.[i])));
     out.precipitation_probability_max.push(avg(blend.map(m => data.daily[`precipitation_probability_max_${m}`]?.[i])));
+
+    const iconFromHours = dailyIconFromHourly(days[i], blendedHourly);
     out.weather_code.push(
-      data.daily[`weather_code_${primary}`]?.[i] ?? data.daily[`weather_code_${blend[0]}`]?.[i]
+      iconFromHours ?? data.daily[`weather_code_${primary}`]?.[i] ?? data.daily[`weather_code_${blend[0]}`]?.[i]
     );
   }
   return out;
@@ -394,7 +413,7 @@ async function getWeather(lat, lon, placeName) {
     const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,relative_humidity_2m,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=10&models=${modelsParam}`);
     const data = await res.json();
     const blendedHourly = buildBlendedHourly(data);
-    const blendedDaily = buildBlendedDaily(data);
+    const blendedDaily = buildBlendedDaily(data, blendedHourly);
     lastData = { hourly: blendedHourly, daily: blendedDaily };
     renderWeather(blendedHourly, placeName);
     renderHourly(lastData);
