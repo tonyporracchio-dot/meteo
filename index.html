@@ -12,9 +12,13 @@
 <meta name="theme-color" content="#0d0f1a">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html {
+    background: #0d0f1a;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: radial-gradient(circle at top, #1e2233 0%, #0d0f1a 70%);
+    background-attachment: fixed;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -70,15 +74,13 @@
     transition: background 0.15s ease;
   }
   button:hover { background: #4874e0; }
-  .location-btn {
-    background: none;
+  .location-icon-btn {
+    background: rgba(255,255,255,0.08);
     color: #8fa8ff;
-    text-decoration: underline;
-    font-size: 0.85rem;
-    padding: 5px;
-    margin-bottom: 6px;
+    padding: 10px 12px;
+    font-size: 1.05rem;
   }
-  .location-btn:hover { background: none; color: #b1c2ff; }
+  .location-icon-btn:hover { background: rgba(255,255,255,0.15); }
 
   .icon { font-size: 4rem; line-height: 1; }
   .city { font-size: 1.2rem; color: #d5d8e4; margin: 6px 0 2px; }
@@ -208,10 +210,10 @@
   <h1>🌤️ Meteo</h1>
 
   <div class="search-box">
+    <button class="location-icon-btn" onclick="useMyLocation()" title="Usa la mia posizione">📍</button>
     <input type="text" id="cityInput" placeholder="Nome città..." />
     <button onclick="searchCity()">Cerca</button>
   </div>
-  <button class="location-btn" onclick="useMyLocation()">📍 Usa la mia posizione</button>
 
   <div id="result"></div>
 
@@ -264,9 +266,24 @@ async function useMyLocation() {
   }
   showLoading();
   navigator.geolocation.getCurrentPosition(
-    (pos) => getWeather(pos.coords.latitude, pos.coords.longitude, "La tua posizione"),
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const placeName = await reverseGeocode(lat, lon);
+      getWeather(lat, lon, placeName);
+    },
     () => showError("Impossibile ottenere la posizione.")
   );
+}
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=it`);
+    const data = await res.json();
+    return data.city || data.locality || data.principalSubdivision || "Posizione attuale";
+  } catch (e) {
+    return "Posizione attuale";
+  }
 }
 
 async function searchCity() {
@@ -316,13 +333,15 @@ function renderHourly(data) {
   for (let i = startIdx; i < startIdx + 24 && i < times.length; i++) {
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
+    const willRain = rainProb[i] > 0 || rainMm[i] > 0;
+    const rainHtml = willRain ? `
+        <div class="h-rain">💧${rainProb[i]}%</div>
+        <div class="h-rain">${rainMm[i].toFixed(1)}mm</div>` : '';
     html += `
       <div class="hourly-item">
         <div>${hour}:00</div>
         <div class="h-icon">${icon}</div>
-        <div>${Math.round(temps[i])}°</div>
-        <div class="h-rain">💧${rainProb[i]}%</div>
-        <div class="h-rain">${rainMm[i].toFixed(1)}mm</div>
+        <div>${Math.round(temps[i])}°</div>${rainHtml}
       </div>
     `;
   }
@@ -336,6 +355,7 @@ function renderDaily(data) {
   const max = data.daily.temperature_2m_max;
   const min = data.daily.temperature_2m_min;
   const rainSum = data.daily.precipitation_sum;
+  const rainProbMax = data.daily.precipitation_probability_max;
   const dayNames = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 
   let html = '';
@@ -343,11 +363,15 @@ function renderDaily(data) {
     const d = new Date(days[i]);
     const label = i === 0 ? 'Oggi' : dayNames[d.getDay()];
     const [icon] = weatherInfo(codes[i], 12);
+    const willRain = rainSum[i] > 0 || rainProbMax[i] > 0;
+    const rainHtml = willRain
+      ? `<div class="daily-rain">💧 ${rainProbMax[i]}% · ${rainSum[i].toFixed(1)}mm</div>`
+      : `<div class="daily-rain"></div>`;
     html += `
       <div class="daily-row" onclick="openDayModal(${i})">
         <div class="daily-day">${label}</div>
         <div class="daily-icon">${icon}</div>
-        <div class="daily-rain">💧 ${rainSum[i].toFixed(1)}mm</div>
+        ${rainHtml}
         <div class="daily-temps"><span class="max">${Math.round(min[i])}°</span> / ${Math.round(max[i])}°</div>
       </div>
     `;
@@ -375,12 +399,14 @@ function openDayModal(dayIndex) {
     if (!times[i].startsWith(dayDate)) continue;
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
+    const willRain = rainProb[i] > 0 || rainMm[i] > 0;
+    const rainPart = willRain ? `💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm · ` : '';
     html += `
       <div class="modal-hour-row">
         <div class="mh-time">${hour}:00</div>
         <div class="mh-icon">${icon}</div>
         <div class="mh-temp">${Math.round(temps[i])}°</div>
-        <div class="mh-rain">💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm · 💨${Math.round(wind[i])}km/h</div>
+        <div class="mh-rain">${rainPart}💨${Math.round(wind[i])}km/h</div>
       </div>
     `;
   }
@@ -418,10 +444,13 @@ function weatherInfo(code, hour) {
     1: isNight ? ["🌙", "Poco nuvoloso"] : ["🌤️", "Poco nuvoloso"],
     2: isNight ? ["☁️", "Parzialmente nuvoloso"] : ["⛅", "Parzialmente nuvoloso"],
     3: ["☁️", "Nuvoloso"], 45: ["🌫️", "Nebbia"], 48: ["🌫️", "Nebbia gelata"],
-    51: ["🌦️", "Pioggerella leggera"], 53: ["🌦️", "Pioggerella"], 55: ["🌧️", "Pioggerella intensa"],
+    51: isNight ? ["🌙🌧️", "Pioggerella leggera"] : ["🌦️", "Pioggerella leggera"],
+    53: isNight ? ["🌙🌧️", "Pioggerella"] : ["🌦️", "Pioggerella"],
+    55: ["🌧️", "Pioggerella intensa"],
     61: ["🌧️", "Pioggia leggera"], 63: ["🌧️", "Pioggia"], 65: ["🌧️", "Pioggia intensa"],
     71: ["🌨️", "Neve leggera"], 73: ["🌨️", "Neve"], 75: ["❄️", "Neve intensa"],
-    80: ["🌦️", "Rovesci leggeri"], 81: ["🌧️", "Rovesci"], 82: ["⛈️", "Rovesci violenti"],
+    80: isNight ? ["🌙🌧️", "Rovesci leggeri"] : ["🌦️", "Rovesci leggeri"],
+    81: ["🌧️", "Rovesci"], 82: ["⛈️", "Rovesci violenti"],
     95: ["⛈️", "Temporale"], 96: ["⛈️", "Temporale con grandine"], 99: ["⛈️", "Temporale forte"]
   };
   return map[code] || ["🌡️", "Condizioni sconosciute"];
