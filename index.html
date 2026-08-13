@@ -329,14 +329,76 @@ async function searchCity() {
   }
 }
 
+// Modelli usati in base al periodo di previsione:
+// 0-48h    -> ICON seamless (include automaticamente ICON-D2 ad alta risoluzione dove disponibile) + ECMWF IFS
+// 2-5gg    -> ECMWF IFS
+// 5-10gg   -> ECMWF IFS + AIFS (modello AI di ECMWF)
+const MODELS = ['ecmwf_ifs025', 'icon_seamless', 'ecmwf_aifs025_single'];
+
+function pickModelsForHours(hoursAhead) {
+  if (hoursAhead <= 48) return { primary: 'icon_seamless', blend: ['icon_seamless', 'ecmwf_ifs025'] };
+  if (hoursAhead <= 120) return { primary: 'ecmwf_ifs025', blend: ['ecmwf_ifs025'] };
+  return { primary: 'ecmwf_ifs025', blend: ['ecmwf_ifs025', 'ecmwf_aifs025_single'] };
+}
+
+function avg(values) {
+  const v = values.filter(x => x !== null && x !== undefined && !isNaN(x));
+  if (!v.length) return null;
+  return v.reduce((a, b) => a + b, 0) / v.length;
+}
+
+function buildBlendedHourly(data) {
+  const times = data.hourly.time;
+  const now = new Date();
+  const out = { time: times, temperature_2m: [], weather_code: [], precipitation_probability: [], precipitation: [], relative_humidity_2m: [], wind_speed_10m: [] };
+
+  for (let i = 0; i < times.length; i++) {
+    const hoursAhead = (new Date(times[i]) - now) / 3600000;
+    const { primary, blend } = pickModelsForHours(hoursAhead);
+
+    out.temperature_2m.push(avg(blend.map(m => data.hourly[`temperature_2m_${m}`]?.[i])));
+    out.precipitation_probability.push(avg(blend.map(m => data.hourly[`precipitation_probability_${m}`]?.[i])));
+    out.precipitation.push(avg(blend.map(m => data.hourly[`precipitation_${m}`]?.[i])));
+    out.relative_humidity_2m.push(avg(blend.map(m => data.hourly[`relative_humidity_2m_${m}`]?.[i])));
+    out.wind_speed_10m.push(avg(blend.map(m => data.hourly[`wind_speed_10m_${m}`]?.[i])));
+    out.weather_code.push(
+      data.hourly[`weather_code_${primary}`]?.[i] ?? data.hourly[`weather_code_${blend[0]}`]?.[i]
+    );
+  }
+  return out;
+}
+
+function buildBlendedDaily(data) {
+  const days = data.daily.time;
+  const now = new Date();
+  const out = { time: days, weather_code: [], temperature_2m_max: [], temperature_2m_min: [], precipitation_sum: [], precipitation_probability_max: [] };
+
+  for (let i = 0; i < days.length; i++) {
+    const hoursAhead = i * 24;
+    const { primary, blend } = pickModelsForHours(hoursAhead);
+
+    out.temperature_2m_max.push(avg(blend.map(m => data.daily[`temperature_2m_max_${m}`]?.[i])));
+    out.temperature_2m_min.push(avg(blend.map(m => data.daily[`temperature_2m_min_${m}`]?.[i])));
+    out.precipitation_sum.push(avg(blend.map(m => data.daily[`precipitation_sum_${m}`]?.[i])));
+    out.precipitation_probability_max.push(avg(blend.map(m => data.daily[`precipitation_probability_max_${m}`]?.[i])));
+    out.weather_code.push(
+      data.daily[`weather_code_${primary}`]?.[i] ?? data.daily[`weather_code_${blend[0]}`]?.[i]
+    );
+  }
+  return out;
+}
+
 async function getWeather(lat, lon, placeName) {
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7&models=ecmwf_ifs025`);
+    const modelsParam = MODELS.join(',');
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,relative_humidity_2m,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=10&models=${modelsParam}`);
     const data = await res.json();
-    lastData = data;
-    renderWeather(data, placeName);
-    renderHourly(data);
-    renderDaily(data);
+    const blendedHourly = buildBlendedHourly(data);
+    const blendedDaily = buildBlendedDaily(data);
+    lastData = { hourly: blendedHourly, daily: blendedDaily };
+    renderWeather(blendedHourly, placeName);
+    renderHourly(lastData);
+    renderDaily(lastData);
     loadWindyWidget(lat, lon);
   } catch (e) {
     showError("Errore nel recupero dei dati meteo.");
@@ -481,18 +543,21 @@ function weatherInfo(code, hour) {
   return map[code] || ["🌡️", "Condizioni sconosciute"];
 }
 
-function renderWeather(data, placeName) {
-  const c = data.current;
+function renderWeather(blendedHourly, placeName) {
+  const now = new Date();
+  let idx = blendedHourly.time.findIndex(t => new Date(t) >= now);
+  if (idx === -1) idx = 0;
+
   const currentHour = new Date().getHours();
-  const [icon, desc] = weatherInfo(c.weather_code, currentHour);
+  const [icon, desc] = weatherInfo(blendedHourly.weather_code[idx], currentHour);
   document.getElementById('result').innerHTML = `
     <div class="icon">${icon}</div>
     <div class="city">${placeName}</div>
-    <div class="temp">${Math.round(c.temperature_2m)}°C</div>
+    <div class="temp">${Math.round(blendedHourly.temperature_2m[idx])}°C</div>
     <div class="desc">${desc}</div>
     <div class="details">
-      <span>💧 ${c.relative_humidity_2m}%<small>Umidità</small></span>
-      <span>💨 ${Math.round(c.wind_speed_10m)} km/h<small>Vento</small></span>
+      <span>💧 ${Math.round(blendedHourly.relative_humidity_2m[idx])}%<small>Umidità</small></span>
+      <span>💨 ${Math.round(blendedHourly.wind_speed_10m[idx])} km/h<small>Vento</small></span>
     </div>
   `;
 }
