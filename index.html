@@ -329,23 +329,19 @@ async function searchCity() {
   }
 }
 
-// Modelli usati in base al periodo di previsione:
-// 0-48h    -> ICON seamless (include automaticamente ICON-D2 ad alta risoluzione dove disponibile) + ECMWF IFS
+// Modelli usati in base al periodo di previsione (nessuna media: un solo modello per fascia oraria)
+// 0-48h    -> ICON seamless (include automaticamente ICON-D2 ad alta risoluzione dove disponibile)
 // 2-5gg    -> ECMWF IFS
-// 5-10gg   -> ECMWF IFS + AIFS (modello AI di ECMWF)
+// 5-10gg   -> AIFS (modello AI di ECMWF, più adatto sul lungo periodo)
 const MODELS = ['ecmwf_ifs025', 'icon_seamless', 'ecmwf_aifs025_single'];
 
-function pickModelsForHours(hoursAhead) {
-  if (hoursAhead <= 48) return { primary: 'icon_seamless', blend: ['icon_seamless', 'ecmwf_ifs025'] };
-  if (hoursAhead <= 120) return { primary: 'ecmwf_ifs025', blend: ['ecmwf_ifs025'] };
-  return { primary: 'ecmwf_ifs025', blend: ['ecmwf_ifs025', 'ecmwf_aifs025_single'] };
+function pickModelForHours(hoursAhead) {
+  if (hoursAhead <= 48) return 'icon_seamless';
+  if (hoursAhead <= 120) return 'ecmwf_ifs025';
+  return 'ecmwf_aifs025_single';
 }
 
-function avg(values) {
-  const v = values.filter(x => x !== null && x !== undefined && !isNaN(x));
-  if (!v.length) return null;
-  return v.reduce((a, b) => a + b, 0) / v.length;
-}
+const RAIN_CODES = new Set([51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99]);
 
 function buildBlendedHourly(data) {
   const times = data.hourly.time;
@@ -354,16 +350,23 @@ function buildBlendedHourly(data) {
 
   for (let i = 0; i < times.length; i++) {
     const hoursAhead = (new Date(times[i]) - now) / 3600000;
-    const { primary, blend } = pickModelsForHours(hoursAhead);
+    const model = pickModelForHours(hoursAhead);
 
-    out.temperature_2m.push(avg(blend.map(m => data.hourly[`temperature_2m_${m}`]?.[i])));
-    out.precipitation_probability.push(avg(blend.map(m => data.hourly[`precipitation_probability_${m}`]?.[i])));
-    out.precipitation.push(avg(blend.map(m => data.hourly[`precipitation_${m}`]?.[i])));
-    out.relative_humidity_2m.push(avg(blend.map(m => data.hourly[`relative_humidity_2m_${m}`]?.[i])));
-    out.wind_speed_10m.push(avg(blend.map(m => data.hourly[`wind_speed_10m_${m}`]?.[i])));
-    out.weather_code.push(
-      data.hourly[`weather_code_${primary}`]?.[i] ?? data.hourly[`weather_code_${blend[0]}`]?.[i]
-    );
+    const prob = data.hourly[`precipitation_probability_${model}`]?.[i] ?? null;
+    const mm = data.hourly[`precipitation_${model}`]?.[i] ?? null;
+    out.temperature_2m.push(data.hourly[`temperature_2m_${model}`]?.[i] ?? null);
+    out.precipitation_probability.push(prob);
+    out.precipitation.push(mm);
+    out.relative_humidity_2m.push(data.hourly[`relative_humidity_2m_${model}`]?.[i] ?? null);
+    out.wind_speed_10m.push(data.hourly[`wind_speed_10m_${model}`]?.[i] ?? null);
+
+    let code = data.hourly[`weather_code_${model}`]?.[i];
+    // Se il codice indica pioggia ma mm/probabilità dello stesso modello sono sotto soglia, l'icona non deve mostrare pioggia
+    const willRain = (prob ?? 0) >= 10 && (mm ?? 0) >= 0.3;
+    if (RAIN_CODES.has(code) && !willRain) {
+      code = 3; // nuvoloso, fallback coerente
+    }
+    out.weather_code.push(code);
   }
   return out;
 }
@@ -392,16 +395,16 @@ function buildBlendedDaily(data, blendedHourly) {
 
   for (let i = 0; i < days.length; i++) {
     const hoursAhead = i * 24;
-    const { primary, blend } = pickModelsForHours(hoursAhead);
+    const model = pickModelForHours(hoursAhead);
 
-    out.temperature_2m_max.push(avg(blend.map(m => data.daily[`temperature_2m_max_${m}`]?.[i])));
-    out.temperature_2m_min.push(avg(blend.map(m => data.daily[`temperature_2m_min_${m}`]?.[i])));
-    out.precipitation_sum.push(avg(blend.map(m => data.daily[`precipitation_sum_${m}`]?.[i])));
-    out.precipitation_probability_max.push(avg(blend.map(m => data.daily[`precipitation_probability_max_${m}`]?.[i])));
+    out.temperature_2m_max.push(data.daily[`temperature_2m_max_${model}`]?.[i] ?? null);
+    out.temperature_2m_min.push(data.daily[`temperature_2m_min_${model}`]?.[i] ?? null);
+    out.precipitation_sum.push(data.daily[`precipitation_sum_${model}`]?.[i] ?? null);
+    out.precipitation_probability_max.push(data.daily[`precipitation_probability_max_${model}`]?.[i] ?? null);
 
     const iconFromHours = dailyIconFromHourly(days[i], blendedHourly);
     out.weather_code.push(
-      iconFromHours ?? data.daily[`weather_code_${primary}`]?.[i] ?? data.daily[`weather_code_${blend[0]}`]?.[i]
+      iconFromHours ?? data.daily[`weather_code_${model}`]?.[i]
     );
   }
   return out;
