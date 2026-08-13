@@ -338,7 +338,7 @@ function renderHourly(data) {
   for (let i = startIdx; i < startIdx + 24 && i < times.length; i++) {
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
-    const willRain = rainProb[i] >= 10;
+    const willRain = rainProb[i] >= 10 && rainMm[i] >= 0.3;
     const rainHtml = willRain ? `
         <div class="h-rain">💧${rainProb[i]}%</div>
         <div class="h-rain">${rainMm[i].toFixed(1)}mm</div>` : '';
@@ -368,7 +368,7 @@ function renderDaily(data) {
     const d = new Date(days[i]);
     const label = i === 0 ? 'Oggi' : dayNames[d.getDay()];
     const [icon] = weatherInfo(codes[i], 12);
-    const willRain = rainProbMax[i] >= 10;
+    const willRain = rainProbMax[i] >= 10 && rainSum[i] >= 0.3;
     const rainHtml = willRain
       ? `<div class="daily-rain">💧 ${rainProbMax[i]}% · ${rainSum[i].toFixed(1)}mm</div>`
       : `<div class="daily-rain"></div>`;
@@ -404,14 +404,14 @@ function openDayModal(dayIndex) {
     if (!times[i].startsWith(dayDate)) continue;
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
-    const willRain = rainProb[i] >= 10;
-    const rainPart = willRain ? `💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm · ` : '';
+    const willRain = rainProb[i] >= 10 && rainMm[i] >= 0.3;
+    const rainPart = willRain ? `💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm` : '';
     html += `
       <div class="modal-hour-row">
         <div class="mh-time">${hour}:00</div>
         <div class="mh-icon">${icon}</div>
         <div class="mh-temp">${Math.round(temps[i])}°</div>
-        <div class="mh-rain">${rainPart}💨${Math.round(wind[i])}km/h</div>
+        <div class="mh-rain">${rainPart}</div>
       </div>
     `;
   }
