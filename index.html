@@ -13,13 +13,15 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html {
-    background: #0d0f1a;
+    background: radial-gradient(circle at top, #1e2233 0%, #0d0f1a 70%);
+    background-color: #0d0f1a;
     overflow-x: hidden;
+    height: 100%;
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: radial-gradient(circle at top, #1e2233 0%, #0d0f1a 70%);
-    background-attachment: fixed;
+    background-color: #0d0f1a;
     min-height: 100vh;
     min-height: 100dvh;
     width: 100%;
@@ -80,13 +82,19 @@
     transition: background 0.15s ease;
   }
   button:hover { background: #4874e0; }
-  .location-icon-btn {
+  .search-btn {
     background: rgba(255,255,255,0.08);
-    color: #8fa8ff;
-    padding: 10px 12px;
-    font-size: 1.05rem;
+    color: #c3c6d4;
+    font-size: 0.95rem;
   }
-  .location-icon-btn:hover { background: rgba(255,255,255,0.15); }
+  .search-btn:hover { background: rgba(255,255,255,0.15); }
+  .location-icon-btn {
+    background: rgba(255,255,255,0.05);
+    color: #767c92;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+  }
+  .location-icon-btn:hover { background: rgba(255,255,255,0.1); color: #9aa0b4; }
 
   .icon { font-size: 4rem; line-height: 1; }
   .city { font-size: 1.2rem; color: #d5d8e4; margin: 6px 0 2px; }
@@ -218,7 +226,7 @@
   <div class="search-box">
     <button class="location-icon-btn" onclick="useMyLocation()" title="Usa la mia posizione">📍</button>
     <input type="text" id="cityInput" placeholder="Nome città..." />
-    <button onclick="searchCity()">Cerca</button>
+    <button class="search-btn" onclick="searchCity()">Cerca</button>
   </div>
 
   <div id="result"></div>
