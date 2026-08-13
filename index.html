@@ -275,7 +275,11 @@ let lastData = null;
 
 async function useMyLocation() {
   if (!navigator.geolocation) {
-    showError("Geolocalizzazione non supportata dal browser.");
+    showError("Geolocalizzazione non supportata dal browser.", true);
+    return;
+  }
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    showError("La geolocalizzazione richiede HTTPS. Apri l'app dal link GitHub Pages, non da file locale.", true);
     return;
   }
   showLoading();
@@ -286,7 +290,14 @@ async function useMyLocation() {
       const placeName = await reverseGeocode(lat, lon);
       getWeather(lat, lon, placeName);
     },
-    () => showError("Impossibile ottenere la posizione.")
+    (err) => {
+      let msg = "Impossibile ottenere la posizione.";
+      if (err.code === 1) msg = "Permesso negato. Controlla Impostazioni → Privacy → Localizzazione su iPhone.";
+      else if (err.code === 2) msg = "Posizione non disponibile al momento.";
+      else if (err.code === 3) msg = "Richiesta scaduta. Riprova.";
+      showError(msg, true);
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
   );
 }
 
@@ -490,8 +501,11 @@ function showLoading() {
   document.getElementById('result').innerHTML = '<div class="loading">Caricamento...</div>';
 }
 
-function showError(msg) {
-  document.getElementById('result').innerHTML = `<div class="error">${msg}</div>`;
+function showError(msg, showRetryLocation) {
+  const retryBtn = showRetryLocation
+    ? `<button class="search-btn" style="margin-top:12px;" onclick="useMyLocation()">📍 Riprova</button>`
+    : '';
+  document.getElementById('result').innerHTML = `<div class="error">${msg}</div>${retryBtn}`;
 }
 
 document.getElementById('cityInput').addEventListener('keypress', (e) => {
