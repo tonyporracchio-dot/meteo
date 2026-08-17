@@ -125,7 +125,7 @@
     color: #c3c6d4;
     min-width: 46px;
   }
-  .hourly-item .h-icon { font-size: 1.6rem; margin: 4px 0; }
+  .hourly-item .h-icon { font-size: 2.1rem; margin: 6px 0; }
   .hourly-item .h-rain { font-size: 0.7rem; color: #5b8cff; margin-top: 2px; }
 
   .daily-row {
@@ -142,8 +142,10 @@
   }
   .daily-row:hover { background: rgba(255,255,255,0.05); }
   .daily-row:last-child { border-bottom: none; }
-  .daily-day { flex: 1.1; color: #e6e8ef; font-weight: 500; }
-  .daily-icon { flex: 0.5; font-size: 1.3rem; }
+  .daily-day { flex: 1.1; color: #e6e8ef; }
+  .daily-day-name { font-size: 1.05rem; font-weight: 700; text-transform: capitalize; }
+  .daily-day-date { font-size: 0.75rem; color: #9aa0b4; margin-top: 2px; }
+  .daily-icon { flex: 0.6; font-size: 2rem; }
   .daily-rain { flex: 0.9; font-size: 0.8rem; color: #5b8cff; text-align: center; }
   .daily-temps { flex: 1; text-align: right; color: #c3c6d4; }
   .daily-temps .max { font-weight: 600; color: #f2f3f7; }
@@ -166,6 +168,7 @@
   .radar-modal-box { max-width: 700px; }
 
   .error { color: #ff6b6b; font-size: 0.9rem; margin-top: 10px; }
+  .updated-time { color: #5c6178; font-size: 0.7rem; margin-top: 4px; }
   .loading { color: #9aa0b4; margin-top: 10px; }
 
   .modal-overlay {
@@ -213,7 +216,7 @@
   }
   .modal-hour-row:last-child { border-bottom: none; }
   .mh-time { flex: 0.8; color: #e6e8ef; }
-  .mh-icon { flex: 0.6; font-size: 1.3rem; text-align: center; }
+  .mh-icon { flex: 0.6; font-size: 1.9rem; text-align: center; }
   .mh-temp { flex: 0.8; text-align: center; color: #f2f3f7; font-weight: 500; }
   .mh-rain { flex: 1; text-align: right; color: #5b8cff; font-size: 0.8rem; }
 </style>
@@ -272,6 +275,9 @@
 
 <script>
 let lastData = null;
+let currentLat = null;
+let currentLon = null;
+let currentPlaceName = null;
 
 async function useMyLocation() {
   if (!navigator.geolocation) {
@@ -297,7 +303,7 @@ async function useMyLocation() {
       else if (err.code === 3) msg = "Richiesta scaduta. Riprova.";
       showError(msg, true);
     },
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
   );
 }
 
@@ -305,7 +311,8 @@ async function reverseGeocode(lat, lon) {
   try {
     const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=it`);
     const data = await res.json();
-    return data.city || data.locality || data.principalSubdivision || "Posizione attuale";
+    // "locality" è di solito il comune esatto (es. Bollate), "city" può essere l'area urbana più ampia (es. Milano)
+    return data.locality || data.city || data.principalSubdivision || "Posizione attuale";
   } catch (e) {
     return "Posizione attuale";
   }
@@ -341,7 +348,8 @@ function pickModelForHours(hoursAhead) {
   return 'ecmwf_aifs025_single';
 }
 
-const RAIN_CODES = new Set([51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99]);
+const RAIN_CODES = new Set([51, 53, 55, 61, 63, 65, 80, 81, 82]);
+const THUNDER_CODES = new Set([95, 96, 99]);
 
 function buildBlendedHourly(data) {
   const times = data.hourly.time;
@@ -361,8 +369,8 @@ function buildBlendedHourly(data) {
     out.wind_speed_10m.push(data.hourly[`wind_speed_10m_${model}`]?.[i] ?? null);
 
     let code = data.hourly[`weather_code_${model}`]?.[i];
-    // Se il codice indica pioggia ma mm/probabilità dello stesso modello sono sotto soglia, l'icona non deve mostrare pioggia
-    const willRain = (prob ?? 0) >= 10 && (mm ?? 0) >= 0.3;
+    // Se il modello indica un codice di pioggia ma non c'è alcun segnale reale di pioggia, declassa a nuvoloso
+    const willRain = (prob ?? 0) > 0 || (mm ?? 0) > 0;
     if (RAIN_CODES.has(code) && !willRain) {
       code = 3; // nuvoloso, fallback coerente
     }
@@ -412,6 +420,10 @@ function buildBlendedDaily(data, blendedHourly) {
 
 async function getWeather(lat, lon, placeName) {
   try {
+    currentLat = lat;
+    currentLon = lon;
+    currentPlaceName = placeName;
+
     const modelsParam = MODELS.join(',');
     const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,relative_humidity_2m,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=10&models=${modelsParam}`);
     const data = await res.json();
@@ -422,10 +434,40 @@ async function getWeather(lat, lon, placeName) {
     renderHourly(lastData);
     renderDaily(lastData);
     loadWindyWidget(lat, lon);
+    showUpdatedTime();
   } catch (e) {
     showError("Errore nel recupero dei dati meteo.");
   }
 }
+
+function showUpdatedTime() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  let el = document.getElementById('updatedTime');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'updatedTime';
+    el.className = 'updated-time';
+    document.getElementById('result').insertAdjacentElement('afterend', el);
+  }
+  el.textContent = `Aggiornato alle ${timeStr}`;
+}
+
+function refreshWeather() {
+  if (currentLat !== null && currentLon !== null) {
+    getWeather(currentLat, currentLon, currentPlaceName);
+  }
+}
+
+// Aggiorna automaticamente ogni 15 minuti
+setInterval(refreshWeather, 15 * 60 * 1000);
+
+// Aggiorna quando l'app torna in primo piano (utile su iOS dopo che è stata in background)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    refreshWeather();
+  }
+});
 
 function renderHourly(data) {
   const now = new Date();
@@ -442,7 +484,7 @@ function renderHourly(data) {
   for (let i = startIdx; i < startIdx + 24 && i < times.length; i++) {
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
-    const willRain = rainProb[i] >= 10 && rainMm[i] >= 0.3;
+    const willRain = (rainProb[i] ?? 0) > 0 || (rainMm[i] ?? 0) > 0;
     const rainHtml = willRain ? `
         <div class="h-rain">💧${rainProb[i]}%</div>
         <div class="h-rain">${rainMm[i].toFixed(1)}mm</div>` : '';
@@ -465,20 +507,24 @@ function renderDaily(data) {
   const min = data.daily.temperature_2m_min;
   const rainSum = data.daily.precipitation_sum;
   const rainProbMax = data.daily.precipitation_probability_max;
-  const dayNames = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  const dayNames = ['dom','lun','mar','mer','gio','ven','sab'];
 
   let html = '';
   for (let i = 0; i < days.length; i++) {
     const d = new Date(days[i]);
-    const label = i === 0 ? 'Oggi' : dayNames[d.getDay()];
+    const dayName = dayNames[d.getDay()];
+    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
     const [icon] = weatherInfo(codes[i], 12);
-    const willRain = rainProbMax[i] >= 10 && rainSum[i] >= 0.3;
+    const willRain = (rainProbMax[i] ?? 0) > 0 || (rainSum[i] ?? 0) > 0;
     const rainHtml = willRain
       ? `<div class="daily-rain">💧 ${rainProbMax[i]}% · ${rainSum[i].toFixed(1)}mm</div>`
       : `<div class="daily-rain"></div>`;
     html += `
       <div class="daily-row" onclick="openDayModal(${i})">
-        <div class="daily-day">${label}</div>
+        <div class="daily-day">
+          <div class="daily-day-name">${dayName}</div>
+          <div class="daily-day-date">${dateStr}</div>
+        </div>
         <div class="daily-icon">${icon}</div>
         ${rainHtml}
         <div class="daily-temps"><span class="max">${Math.round(min[i])}°</span> / ${Math.round(max[i])}°</div>
@@ -508,7 +554,7 @@ function openDayModal(dayIndex) {
     if (!times[i].startsWith(dayDate)) continue;
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
-    const willRain = rainProb[i] >= 10 && rainMm[i] >= 0.3;
+    const willRain = (rainProb[i] ?? 0) > 0 || (rainMm[i] ?? 0) > 0;
     const rainPart = willRain ? `💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm` : '';
     html += `
       <div class="modal-hour-row">
@@ -553,13 +599,13 @@ function weatherInfo(code, hour) {
     1: isNight ? ["🌙", "Poco nuvoloso"] : ["🌤️", "Poco nuvoloso"],
     2: isNight ? ["☁️", "Parzialmente nuvoloso"] : ["⛅", "Parzialmente nuvoloso"],
     3: ["☁️", "Nuvoloso"], 45: ["🌫️", "Nebbia"], 48: ["🌫️", "Nebbia gelata"],
-    51: isNight ? ["🌧️", "Pioggerella leggera"] : ["🌦️", "Pioggerella leggera"],
-    53: isNight ? ["🌧️", "Pioggerella"] : ["🌦️", "Pioggerella"],
-    55: ["🌧️", "Pioggerella intensa"],
-    61: ["🌧️", "Pioggia leggera"], 63: ["🌧️", "Pioggia"], 65: ["🌧️", "Pioggia intensa"],
+    51: ["🌦️", "Pioggerella leggera"],
+    53: ["🌦️", "Pioggerella"],
+    55: ["🌦️", "Pioggerella intensa"],
+    61: ["🌦️", "Pioggia leggera"], 63: ["🌦️", "Pioggia"], 65: ["🌦️", "Pioggia intensa"],
     71: ["🌨️", "Neve leggera"], 73: ["🌨️", "Neve"], 75: ["❄️", "Neve intensa"],
-    80: isNight ? ["🌧️", "Rovesci leggeri"] : ["🌦️", "Rovesci leggeri"],
-    81: ["🌧️", "Rovesci"], 82: ["⛈️", "Rovesci violenti"],
+    80: ["🌦️", "Rovesci leggeri"],
+    81: ["🌦️", "Rovesci"], 82: ["⛈️", "Rovesci violenti"],
     95: ["⛈️", "Temporale"], 96: ["⛈️", "Temporale con grandine"], 99: ["⛈️", "Temporale forte"]
   };
   return map[code] || ["🌡️", "Condizioni sconosciute"];
@@ -593,6 +639,8 @@ function showError(msg, showRetryLocation) {
     ? `<button class="search-btn" style="margin-top:12px;" onclick="useMyLocation()">📍 Riprova</button>`
     : '';
   document.getElementById('result').innerHTML = `<div class="error">${msg}</div>${retryBtn}`;
+  const el = document.getElementById('updatedTime');
+  if (el) el.remove();
 }
 
 document.getElementById('cityInput').addEventListener('keypress', (e) => {
