@@ -351,14 +351,12 @@ async function searchCity() {
 
 // Modelli usati in base al periodo di previsione (nessuna media: un solo modello per fascia oraria)
 // 0-48h    -> ICON seamless (include automaticamente ICON-D2 ad alta risoluzione dove disponibile)
-// 2-5gg    -> ECMWF IFS
-// 5-10gg   -> AIFS (modello AI di ECMWF, più adatto sul lungo periodo)
-const MODELS = ['ecmwf_ifs025', 'icon_seamless', 'ecmwf_aifs025_single'];
+// 2-10gg   -> ECMWF IFS (più affidabile su estremi di pioggia rispetto ad AIFS)
+const MODELS = ['ecmwf_ifs025', 'icon_seamless'];
 
 function pickModelForHours(hoursAhead) {
   if (hoursAhead <= 48) return 'icon_seamless';
-  if (hoursAhead <= 120) return 'ecmwf_ifs025';
-  return 'ecmwf_aifs025_single';
+  return 'ecmwf_ifs025';
 }
 
 const RAIN_CODES = new Set([51, 53, 55, 61, 63, 65, 80, 81, 82]);
@@ -526,8 +524,8 @@ function renderHourly(data) {
     const [icon] = weatherInfo(codes[i], hour);
     const willRain = (rainProb[i] ?? 0) > 0 || (rainMm[i] ?? 0) > 0;
     const rainHtml = willRain ? `
-        <div class="h-rain">💧${rainProb[i]}%</div>
-        <div class="h-rain">${rainMm[i].toFixed(1)}mm</div>` : '';
+        <div class="h-rain">💧${rainProb[i] ?? 0}%</div>
+        <div class="h-rain">${(rainMm[i] ?? 0).toFixed(1)}mm</div>` : '';
     html += `
       <div class="hourly-item">
         <div>${hour}:00</div>
@@ -557,7 +555,7 @@ function renderDaily(data) {
     const [icon] = computeDailyIcon(i, data.daily, data.hourly);
     const willRain = (rainProbMax[i] ?? 0) > 0 || (rainSum[i] ?? 0) > 0;
     const rainHtml = willRain
-      ? `<div class="daily-rain">💧 ${rainProbMax[i]}% · ${rainSum[i].toFixed(1)}mm</div>`
+      ? `<div class="daily-rain">💧 ${rainProbMax[i] ?? 0}% · ${(rainSum[i] ?? 0).toFixed(1)}mm</div>`
       : `<div class="daily-rain"></div>`;
     html += `
       <div class="daily-row" onclick="openDayModal(${i})">
@@ -595,7 +593,7 @@ function openDayModal(dayIndex) {
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
     const willRain = (rainProb[i] ?? 0) > 0 || (rainMm[i] ?? 0) > 0;
-    const rainPart = willRain ? `💧${rainProb[i]}% · ${rainMm[i].toFixed(1)}mm` : '';
+    const rainPart = willRain ? `💧${rainProb[i] ?? 0}% · ${(rainMm[i] ?? 0).toFixed(1)}mm` : '';
     html += `
       <div class="modal-hour-row">
         <div class="mh-time">${hour}:00</div>
