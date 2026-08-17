@@ -43,7 +43,14 @@
     box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     text-align: center;
   }
-  h1 { font-size: 1.3rem; margin-bottom: 20px; color: #f2f3f7; font-weight: 600; }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 1.15rem; color: #f2f3f7; font-weight: 600; white-space: nowrap; }
   .section-title {
     text-align: left;
     font-size: 0.85rem;
@@ -55,16 +62,17 @@
   }
   .search-box {
     display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-    width: 100%;
+    gap: 6px;
+    width: auto;
+    flex: 1;
+    max-width: 190px;
   }
   input {
     flex: 1;
     min-width: 0;
-    padding: 10px 14px;
+    padding: 8px 12px;
     border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
+    border-radius: 10px;
     font-size: 16px;
     background: rgba(255,255,255,0.06);
     color: #f2f3f7;
@@ -89,12 +97,17 @@
   }
   .search-btn:hover { background: rgba(255,255,255,0.15); }
   .location-icon-btn {
-    background: rgba(255,255,255,0.05);
-    color: #767c92;
-    padding: 10px 12px;
-    font-size: 0.95rem;
+    background: none;
+    color: #5c6178;
+    padding: 6px 8px;
+    font-size: 0.9rem;
+    flex-shrink: 0;
   }
-  .location-icon-btn:hover { background: rgba(255,255,255,0.1); color: #9aa0b4; }
+  .location-icon-btn:hover { color: #8a90a8; background: none; }
+  .gps-arrow {
+    display: inline-block;
+    transform: rotate(-45deg);
+  }
 
   .icon { font-size: 4rem; line-height: 1; }
   .city { font-size: 1.2rem; color: #d5d8e4; margin: 6px 0 2px; }
@@ -224,12 +237,12 @@
 <body>
 
 <div class="card">
-  <h1>🌤️ Meteo</h1>
-
-  <div class="search-box">
-    <button class="location-icon-btn" onclick="useMyLocation()" title="Usa la mia posizione">📍</button>
-    <input type="text" id="cityInput" placeholder="Nome città..." />
-    <button class="search-btn" onclick="searchCity()">Cerca</button>
+  <div class="header-row">
+    <h1>🌤️ Meteo</h1>
+    <div class="search-box">
+      <button class="location-icon-btn" onclick="useMyLocation()" title="Usa la mia posizione"><span class="gps-arrow">➤</span></button>
+      <input type="text" id="cityInput" placeholder="Città..." />
+    </div>
   </div>
 
   <div id="result"></div>
@@ -396,6 +409,33 @@ function dailyIconFromHourly(dayDate, blendedHourly) {
   return best;
 }
 
+function computeDailyIcon(dayIndex, blendedDaily, blendedHourly) {
+  const dayDate = blendedDaily.time[dayIndex];
+  const rainSum = blendedDaily.precipitation_sum[dayIndex] ?? 0;
+  const rainProb = blendedDaily.precipitation_probability_max[dayIndex] ?? 0;
+  const dayHasRain = rainSum > 0 || rainProb > 0;
+
+  let hasThunder = false, thunderCode = 95, hasSunChance = false;
+  for (let i = 0; i < blendedHourly.time.length; i++) {
+    if (!blendedHourly.time[i].startsWith(dayDate)) continue;
+    const hour = new Date(blendedHourly.time[i]).getHours();
+    if (hour < 8 || hour > 19) continue;
+    const code = blendedHourly.weather_code[i];
+    if (THUNDER_CODES.has(code)) { hasThunder = true; thunderCode = code; }
+    if (code === 0 || code === 1 || code === 2) hasSunChance = true;
+  }
+
+  if (hasThunder) return weatherInfo(thunderCode, 12);
+
+  if (dayHasRain) {
+    if (rainSum < 0.5 && hasSunChance) return ["🌦️", "Variabile con pioggia debole"];
+    return ["🌧️", "Pioggia"];
+  }
+
+  const modeCode = dailyIconFromHourly(dayDate, blendedHourly);
+  return weatherInfo(modeCode ?? 3, 12);
+}
+
 function buildBlendedDaily(data, blendedHourly) {
   const days = data.daily.time;
 
@@ -514,7 +554,7 @@ function renderDaily(data) {
     const d = new Date(days[i]);
     const dayName = dayNames[d.getDay()];
     const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
-    const [icon] = weatherInfo(codes[i], 12);
+    const [icon] = computeDailyIcon(i, data.daily, data.hourly);
     const willRain = (rainProbMax[i] ?? 0) > 0 || (rainSum[i] ?? 0) > 0;
     const rainHtml = willRain
       ? `<div class="daily-rain">💧 ${rainProbMax[i]}% · ${rainSum[i].toFixed(1)}mm</div>`
