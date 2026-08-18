@@ -136,14 +136,13 @@
     text-align: center;
     font-size: 0.8rem;
     color: #c3c6d4;
-    min-width: 68px;
+    min-width: 52px;
   }
   .hourly-item .h-icon { font-size: 2.1rem; margin: 6px 0; }
-  .h-temp { font-size: 0.95rem; font-weight: 600; color: #f2f3f7; margin-top: 6px; }
   .hourly-item .h-rain { font-size: 0.7rem; font-weight: 600; color: #c3c6d4; margin-top: 1px; }
   .rain-dots { display: flex; gap: 3px; justify-content: center; margin-top: 4px; }
   .rain-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-  .h-wind, .daily-wind { font-size: 0.7rem; margin: 3px 0; white-space: nowrap; }
+  .h-wind, .daily-wind { font-size: 0.7rem; margin: 3px 0; }
   .wind-arrow { display: inline-block; }
 
   .daily-row {
@@ -614,11 +613,11 @@ function renderHourly(data) {
       <div class="hourly-item">
         <div>${hour}:00</div>
         <div class="h-icon">${icon}</div>
+        <div>${Math.round(temps[i])}°</div>
+        <div class="h-wind">${windArrowHtml(windDir[i], windSpeed[i])}</div>
         <div class="h-rain">${willRain ? (rainProb[i] ?? 0) + '%' : '\u00A0'}</div>
         <div class="h-rain">${willRain ? (rainMm[i] ?? 0).toFixed(1) + 'mm' : '\u00A0'}</div>
         ${rainDotsHtml(rainMm[i] ?? 0, false, willRain)}
-        <div class="h-temp">${Math.round(temps[i])}°</div>
-        <div class="h-wind">${windArrowHtml(windDir[i], windSpeed[i])}</div>
       </div>
     `;
   }
@@ -667,12 +666,9 @@ function windColor(speed) {
 }
 
 function windArrowHtml(direction, speed) {
-  if (speed === null || speed === undefined) return '\u00A0';
+  if (direction === null || direction === undefined || speed === null || speed === undefined) return '';
   const color = windColor(speed);
-  const arrow = (direction !== null && direction !== undefined)
-    ? `<span class="wind-arrow" style="transform:rotate(${direction}deg)">↑</span> `
-    : '';
-  return `<span class="wind-line" style="color:${color}">${arrow}${Math.round(speed)}km/h</span>`;
+  return `<span class="wind-line" style="color:${color}"><span class="wind-arrow" style="transform:rotate(${direction}deg)">↑</span> ${Math.round(speed)}km/h</span>`;
 }
 
 function renderDaily(data) {
