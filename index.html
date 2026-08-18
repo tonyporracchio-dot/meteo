@@ -139,8 +139,10 @@
     min-width: 52px;
   }
   .hourly-item .h-icon { font-size: 2.1rem; margin: 6px 0; }
-  .hourly-item .h-rain { font-size: 0.7rem; font-weight: 600; margin-top: 1px; }
-  .h-wind, .daily-wind { font-size: 0.7rem; color: #767c92; margin: 3px 0; }
+  .hourly-item .h-rain { font-size: 0.7rem; font-weight: 600; color: #c3c6d4; margin-top: 1px; }
+  .rain-dots { display: flex; gap: 3px; justify-content: center; margin-top: 4px; }
+  .rain-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+  .h-wind, .daily-wind { font-size: 0.7rem; margin: 3px 0; }
   .wind-arrow { display: inline-block; }
 
   .daily-row {
@@ -162,7 +164,7 @@
   .daily-day-date { font-size: 0.75rem; color: #9aa0b4; margin-top: 2px; }
   .daily-icon { flex: 0.6; font-size: 2rem; }
   .daily-rain { flex: 0.9; font-size: 0.8rem; text-align: center; }
-  .daily-rain .rain-line { font-weight: 600; }
+  .daily-rain .rain-line { font-weight: 600; color: #c3c6d4; }
   .daily-temps { flex: 1; text-align: right; color: #c3c6d4; }
   .daily-temps .max { font-weight: 600; color: #f2f3f7; }
 
@@ -244,7 +246,8 @@
   .mh-time { flex: 0.8; color: #e6e8ef; }
   .mh-icon { flex: 0.6; font-size: 1.9rem; text-align: center; }
   .mh-temp { flex: 0.8; text-align: center; color: #f2f3f7; font-weight: 500; }
-  .mh-rain { flex: 1; text-align: right; color: #5b8cff; font-size: 0.8rem; }
+  .mh-rain { flex: 1; text-align: right; color: #c3c6d4; font-size: 0.8rem; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .mh-rain .rain-dots { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -521,19 +524,42 @@ async function getWeather(lat, lon, placeName) {
 
 const HAIL_CODES = new Set([96, 99]);
 
+function localDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function renderHailAlert(blendedHourly) {
   const now = new Date();
   const cutoff = new Date(now.getTime() + 48 * 3600000);
-  const hours = [];
+  const byDay = {};
   for (let i = 0; i < blendedHourly.time.length; i++) {
     const t = new Date(blendedHourly.time[i]);
     if (t < now || t > cutoff) continue;
-    if (HAIL_CODES.has(blendedHourly.weather_code[i])) hours.push(t);
+    if (!HAIL_CODES.has(blendedHourly.weather_code[i])) continue;
+    const key = localDateKey(t);
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }));
   }
   const el = document.getElementById('hailAlert');
-  if (!hours.length) { el.innerHTML = ''; return; }
-  const timeLabels = hours.map(t => t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })).join(', ');
-  el.innerHTML = `<div class="hail-alert">🧊 Possibile grandine nelle prossime 48h (${timeLabels})</div>`;
+  const dayKeys = Object.keys(byDay);
+  if (!dayKeys.length) { el.innerHTML = ''; return; }
+
+  const todayKey = localDateKey(now);
+  const tomorrowKey = localDateKey(new Date(now.getTime() + 86400000));
+  const dayNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+
+  const parts = dayKeys.sort().map(key => {
+    let label;
+    if (key === todayKey) label = 'oggi';
+    else if (key === tomorrowKey) label = 'domani';
+    else {
+      const [y, m, d] = key.split('-').map(Number);
+      label = dayNames[new Date(y, m - 1, d).getDay()];
+    }
+    return `${label} (${byDay[key].join(', ')})`;
+  });
+
+  el.innerHTML = `<div class="hail-alert">🧊 Possibile grandine: ${parts.join(' · ')}</div>`;
 }
 
 function showUpdatedTime() {
@@ -583,15 +609,15 @@ function renderHourly(data) {
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
     const willRain = (rainProb[i] ?? 0) > 0 || (rainMm[i] ?? 0) > 0;
-    const color = willRain ? rainIntensityColor(rainMm[i] ?? 0, false) : 'transparent';
     html += `
       <div class="hourly-item">
         <div>${hour}:00</div>
         <div class="h-icon">${icon}</div>
         <div>${Math.round(temps[i])}°</div>
         <div class="h-wind">${windArrowHtml(windDir[i], windSpeed[i])}</div>
-        <div class="h-rain" style="color:${color}">${willRain ? (rainProb[i] ?? 0) + '%' : '\u00A0'}</div>
-        <div class="h-rain" style="color:${color}">${willRain ? (rainMm[i] ?? 0).toFixed(1) + 'mm' : '\u00A0'}</div>
+        <div class="h-rain">${willRain ? (rainProb[i] ?? 0) + '%' : '\u00A0'}</div>
+        <div class="h-rain">${willRain ? (rainMm[i] ?? 0).toFixed(1) + 'mm' : '\u00A0'}</div>
+        ${rainDotsHtml(rainMm[i] ?? 0, false, willRain)}
       </div>
     `;
   }
@@ -608,9 +634,41 @@ function rainIntensityColor(mm, isDaily) {
   return '#a855f7'; // viola
 }
 
+// Livello 1-5 in base all'intensità, per il numero di puntini pieni
+function rainIntensityLevel(mm, isDaily) {
+  const scale = isDaily ? [0.5, 5, 15, 30, 50] : [0.1, 0.5, 2.5, 7.6, 15];
+  let level = 0;
+  for (let i = 0; i < scale.length; i++) {
+    if (mm >= scale[i]) level = i + 1;
+  }
+  return Math.max(level, 1);
+}
+
+function rainDotsHtml(mm, isDaily, willRain) {
+  if (!willRain) {
+    return `<div class="rain-dots">${'<span class="rain-dot"></span>'.repeat(5)}</div>`;
+  }
+  const level = rainIntensityLevel(mm, isDaily);
+  const color = rainIntensityColor(mm, isDaily);
+  let dots = '';
+  for (let i = 1; i <= 5; i++) {
+    dots += `<span class="rain-dot" style="background:${i <= level ? color : 'rgba(255,255,255,0.12)'}"></span>`;
+  }
+  return `<div class="rain-dots">${dots}</div>`;
+}
+
+// Colore vento in base alla velocità: grigio (debole), giallo (moderato-forte), rosso (forte)
+function windColor(speed) {
+  if (speed === null || speed === undefined) return '#767c92';
+  if (speed >= 40) return '#ff6b6b'; // rosso forte
+  if (speed >= 20) return '#facc15'; // giallo moderato-forte
+  return '#767c92'; // grigio debole
+}
+
 function windArrowHtml(direction, speed) {
   if (direction === null || direction === undefined || speed === null || speed === undefined) return '';
-  return `<span class="wind-line"><span class="wind-arrow" style="transform:rotate(${direction}deg)">↑</span> ${Math.round(speed)}km/h</span>`;
+  const color = windColor(speed);
+  return `<span class="wind-line" style="color:${color}"><span class="wind-arrow" style="transform:rotate(${direction}deg)">↑</span> ${Math.round(speed)}km/h</span>`;
 }
 
 function renderDaily(data) {
@@ -628,11 +686,11 @@ function renderDaily(data) {
     const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
     const { icon, rainSum, rainProb } = computeDailyData(i, data.daily, data.hourly);
     const willRain = rainProb > 0 || rainSum > 0;
-    const color = willRain ? rainIntensityColor(rainSum, true) : 'transparent';
     const rainHtml = `
       <div class="daily-rain">
-        <div class="rain-line" style="color:${willRain ? color : 'transparent'}">${willRain ? rainProb + '%' : '\u00A0'}</div>
-        <div class="rain-line" style="color:${willRain ? color : 'transparent'}">${willRain ? rainSum.toFixed(1) + 'mm' : '\u00A0'}</div>
+        <div class="rain-line">${willRain ? rainProb + '%' : '\u00A0'}</div>
+        <div class="rain-line">${willRain ? rainSum.toFixed(1) + 'mm' : '\u00A0'}</div>
+        ${rainDotsHtml(rainSum, true, willRain)}
       </div>`;
     html += `
       <div class="daily-row" onclick="openDayModal(${i})">
@@ -673,14 +731,14 @@ function openDayModal(dayIndex) {
     const hour = new Date(times[i]).getHours();
     const [icon] = weatherInfo(codes[i], hour);
     const willRain = (rainProb[i] ?? 0) > 0 || (rainMm[i] ?? 0) > 0;
-    const color = willRain ? rainIntensityColor(rainMm[i] ?? 0, false) : '#767c92';
     const rainPart = willRain ? `${rainProb[i] ?? 0}% · ${(rainMm[i] ?? 0).toFixed(1)}mm` : '';
+    const dots = willRain ? rainDotsHtml(rainMm[i] ?? 0, false, true) : '';
     html += `
       <div class="modal-hour-row">
         <div class="mh-time">${hour}:00</div>
         <div class="mh-icon">${icon}</div>
         <div class="mh-temp">${Math.round(temps[i])}°</div>
-        <div class="mh-rain" style="color:${color}">${rainPart}</div>
+        <div class="mh-rain">${rainPart}${dots}</div>
       </div>
     `;
   }
