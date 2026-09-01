@@ -117,6 +117,7 @@
                 
                 <!-- Autocomplete Dropdown -->
                 <div id="searchResults" class="hidden absolute left-0 right-0 top-full mt-1.5 glass-modal rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-white/10 text-sm"></div>
+                <div id="savedLocations" class="mt-1 hidden absolute left-0 right-0 top-full z-40 glass-modal rounded-xl shadow-2xl max-h-44 overflow-y-auto text-sm"></div>
             </div>
 
             <!-- GPS Button -->
@@ -556,7 +557,7 @@
         function initOrUpdateRadar(lat, lon) {
             if (!leafletMap) {
                 leafletMap = L.map('radarMapContainer', { center: [lat, lon], zoom: 8, minZoom: 3, maxZoom: 19, zoomControl: false, attributionControl: false });
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd' }).addTo(leafletMap);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(leafletMap);
             } else {
                 leafletMap.setView([lat, lon], leafletMap.getZoom());
             }
@@ -680,7 +681,7 @@
                 } catch (e) {}
             }
             fetchWeatherForLocation(currentLat, currentLon, currentCityName);
-            setupSearch(); setupGeoLocation(); setupModalEvents();
+            setupSearch(); setupGeoLocation(); setupModalEvents(); renderSavedLocations();
 
             const handleAutoRefresh = () => { if (Date.now() - lastFetchTimestamp > 60000) { showToast("Aggiornamento previsioni in corso..."); fetchWeatherForLocation(currentLat, currentLon, currentCityName); } };
             document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') handleAutoRefresh(); });
@@ -719,7 +720,17 @@
                             data.results.forEach(item => {
                                 const div = document.createElement('div');
                                 div.className = 'p-2.5 hover:bg-white/10 cursor-pointer transition flex items-center justify-between text-white';
-                                div.innerHTML = `<span class="font-medium">${item.name}</span> <span class="text-xs text-sky-200">${item.admin1 || ''}</span>`;
+                                div.innerHTML = `
+                              <div class="flex items-center w-full justify-between">
+                                <div class="truncate">
+                                  <span class="font-medium">${item.name}</span>
+                                  <span class="text-xs text-sky-200 ml-2">${item.admin1 || ''}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                  <button class="px-2 py-1 text-xs rounded" title="Salva" onclick="(function(e){ e.stopPropagation(); saveLocationObj({name:${JSON.stringify(item.name)}, lat:${item.latitude}, lon:${item.longitude}}); })(event)">★</button>
+                                </div>
+                              </div>
+                            `;
                                 div.onclick = () => { cityInput.value = item.name; searchResults.classList.add('hidden'); fetchWeatherForLocation(item.latitude, item.longitude, item.name); };
                                 searchResults.appendChild(div);
                             });
@@ -1166,6 +1177,55 @@
             modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
         }
         function toggleInfoModal() { const el = document.getElementById('infoModal'); el.classList.toggle('hidden'); }
-    </script>
+    
+
+// --- Saved locations utilities ---
+const SAVED_KEY = 'meteo_saved_locations';
+
+function getSavedLocations() {
+  try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch(e){ return []; }
+}
+
+function saveLocationObj(loc) {
+  const list = getSavedLocations();
+  const exists = list.find(i => Number(i.lat) === Number(loc.lat) && Number(i.lon) === Number(loc.lon));
+  if (!exists) {
+    list.unshift(loc);
+    localStorage.setItem(SAVED_KEY, JSON.stringify(list.slice(0, 12)));
+    renderSavedLocations();
+    showToast('Località salvata');
+  } else {
+    showToast('Località già salvata');
+  }
+}
+
+function removeSavedLocation(idx) {
+  const list = getSavedLocations();
+  if (idx < 0 || idx >= list.length) return;
+  list.splice(idx, 1);
+  localStorage.setItem(SAVED_KEY, JSON.stringify(list));
+  renderSavedLocations();
+}
+
+function renderSavedLocations() {
+  const container = document.getElementById('savedLocations');
+  if (!container) return;
+  const list = getSavedLocations();
+  if (!list || list.length === 0) { container.classList.add('hidden'); container.innerHTML = ''; return; }
+  container.classList.remove('hidden');
+  container.innerHTML = list.map((loc, i) => `
+    <div class="px-3 py-2 flex items-center justify-between hover:bg-white/5">
+      <div class="truncate cursor-pointer" onclick='fetchWeatherForLocation(${loc.lat}, ${loc.lon}, ${JSON.stringify('${loc.name}')} )'>
+        <div class="font-medium">${loc.name}</div>
+        <div class="text-xs text-white/60">${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="text-xs px-2 py-1 rounded" onclick="(function(e){ e.stopPropagation(); removeSavedLocation(${i}); })(event)">Elimina</button>
+      </div>
+    </div>
+  `).join('');
+}
+// --- end saved locations ---
+</script>
 </body>
 </html>
